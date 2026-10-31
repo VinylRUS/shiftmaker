@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Сотрудник — строка таблицы расписания
+model Employee {
+  id        String   @id @default(cuid())
+  name      String
+  position  String?
+  color     String   @default("emerald") // ключ из палитры цветов
+  order     Int      @default(0) // порядок в таблице
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  shifts    Shift[]
+}
+
+// Смена — ячейка таблицы (дата + сотрудник)
+// startTime/endTime необязательны: без времени = дежурство в течение дня
+model Shift {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       String // YYYY-MM-DD
+  startTime  String? // HH:mm
+  endTime    String? // HH:mm (<= startTime означает смену через полночь)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([date])
+  @@index([employeeId])
+}
