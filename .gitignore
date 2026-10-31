@@ -52,3 +52,13 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Локальная база SQLite и артефакты песочницы (в продакшене БД живёт в /app/data)
+/db/
+/download/
+/upload/
+/examples/
+/mini-services/
+/tests/
+/.zscripts/
+/Caddyfile

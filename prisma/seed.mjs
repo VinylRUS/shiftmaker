@@ -1,17 +1,21 @@
-// Демо-данные: сотрудники и смены на текущую неделю (Пн–Вс)
-import { PrismaClient, type Employee } from '@prisma/client'
+// Демо-данные: сотрудники и смены на текущую неделю (Пн–Вс).
+// Файл — чистый JavaScript (.mjs), чтобы его можно было запускать и импортировать
+// как из bun, так и из node без дополнительных зависимостей.
+//
+// Прямой запуск: node prisma/seed.mjs
+// Импорт:        import { seedDemoData } from './prisma/seed.mjs'
+import { PrismaClient } from '@prisma/client'
+import { pathToFileURL } from 'node:url'
 
-const db = new PrismaClient()
-
-const pad = (n: number) => String(n).padStart(2, '0')
-const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const pad = (n) => String(n).padStart(2, '0')
+const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
 // Понедельник текущей недели
 const now = new Date()
 const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
 
-const D = (offset: number) => {
+const D = (offset) => {
   const d = new Date(monday)
   d.setDate(d.getDate() + offset)
   return iso(d)
@@ -26,8 +30,7 @@ const employees = [
 ]
 
 // [день (0=Пн), сотрудник, начало, конец, примечание]
-type Row = [number, number, string | null, string | null, string | null]
-const shifts: Row[] = [
+const shifts = [
   [0, 0, '09:00', '18:00', 'Открытие смены'],
   [0, 1, '08:00', '16:00', null],
   [0, 2, '10:00', '20:00', null],
@@ -52,11 +55,13 @@ const shifts: Row[] = [
   [6, 4, '12:00', '20:00', 'Закрытие недели'],
 ]
 
-async function main() {
+// Полностью заменяет содержимое таблиц демо-данными.
+// Вызывается из scripts/init-db.mjs только при первом создании базы.
+export async function seedDemoData(db) {
   await db.shift.deleteMany()
   await db.employee.deleteMany()
 
-  const created: Employee[] = []
+  const created = []
   for (const e of employees) {
     created.push(await db.employee.create({ data: e }))
   }
@@ -68,17 +73,29 @@ async function main() {
         date: D(day),
         startTime: start,
         endTime: end,
-        note: note,
+        note,
       },
     })
   }
 
-  console.log(`Посеяно: ${created.length} сотрудников, ${shifts.length} смен. Понедельник недели: ${D(0)}`)
+  return { employees: created.length, shifts: shifts.length, monday: D(0) }
 }
 
-main()
-  .catch((e) => {
-    console.error(e)
-    process.exit(1)
-  })
-  .finally(() => db.$disconnect())
+// Прямой запуск: node prisma/seed.mjs
+const isDirectRun =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+
+if (isDirectRun) {
+  const db = new PrismaClient()
+  seedDemoData(db)
+    .then((r) => {
+      console.log(
+        `Посеяно: ${r.employees} сотрудников, ${r.shifts} смен. Понедельник недели: ${r.monday}`
+      )
+    })
+    .catch((e) => {
+      console.error(e)
+      process.exitCode = 1
+    })
+    .finally(() => db.$disconnect())
+}

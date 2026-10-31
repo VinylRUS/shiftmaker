@@ -1,0 +1,22 @@
+# Never copy these into the Docker build context
+node_modules
+.next
+.git
+.env
+.env.*
+db
+download
+upload
+skills
+examples
+mini-services
+tests
+.zscripts
+*.log
+*.tsbuildinfo
+next-env.d.ts
+Caddyfile
+Dockerfile
+.dockerignore
+README.md
+DEPLOY-BOTHOST.md
