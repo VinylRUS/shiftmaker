@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
+import { hasEditAccess, unauthorized } from '@/lib/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,8 +37,10 @@ export async function GET(request: Request) {
   return NextResponse.json(shifts)
 }
 
-// Создать смену
+// Создать смену (требуется вход по коду)
 export async function POST(request: Request) {
+  if (!(await hasEditAccess())) return unauthorized()
+
   const body = await request.json().catch(() => null)
   const parsed = shiftSchema.safeParse(body)
   if (!parsed.success) {
@@ -61,8 +64,10 @@ export async function POST(request: Request) {
   return NextResponse.json(shift, { status: 201 })
 }
 
-// Очистить диапазон дат: ?from=YYYY-MM-DD&to=YYYY-MM-DD
+// Очистить диапазон дат: ?from=YYYY-MM-DD&to=YYYY-MM-DD (требуется вход по коду)
 export async function DELETE(request: Request) {
+  if (!(await hasEditAccess())) return unauthorized()
+
   const { searchParams } = new URL(request.url)
   const from = searchParams.get('from') ?? ''
   const to = searchParams.get('to') ?? ''

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { PALETTE } from '@/lib/palette'
+import { hasEditAccess, unauthorized } from '@/lib/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,8 +23,10 @@ export async function GET() {
   return NextResponse.json(employees)
 }
 
-// Создать сотрудника
+// Создать сотрудника (требуется вход по коду)
 export async function POST(request: Request) {
+  if (!(await hasEditAccess())) return unauthorized()
+
   const body = await request.json().catch(() => null)
   const parsed = employeeSchema.safeParse(body)
   if (!parsed.success) {

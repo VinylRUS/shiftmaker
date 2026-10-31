@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { PALETTE } from '@/lib/palette'
+import { hasEditAccess, unauthorized } from '@/lib/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,8 +16,10 @@ const employeeUpdateSchema = z.object({
   order: z.number().int().min(0).optional(),
 })
 
-// Изменить сотрудника
+// Изменить сотрудника (требуется вход по коду)
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await hasEditAccess())) return unauthorized()
+
   const { id } = await params
   const body = await request.json().catch(() => null)
   const parsed = employeeUpdateSchema.safeParse(body)
@@ -41,8 +44,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json(employee)
 }
 
-// Удалить сотрудника (смены удалятся каскадом)
+// Удалить сотрудника (смены удалятся каскадом; требуется вход по коду)
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await hasEditAccess())) return unauthorized()
+
   const { id } = await params
   const existing = await db.employee.findUnique({ where: { id } })
   if (!existing) {

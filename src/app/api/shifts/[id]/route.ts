@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
+import { hasEditAccess, unauthorized } from '@/lib/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,8 +20,10 @@ const shiftUpdateSchema = z.object({
   note: z.string().trim().max(200).nullable().optional(),
 })
 
-// Изменить/перенести смену
+// Изменить/перенести смену (требуется вход по коду)
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await hasEditAccess())) return unauthorized()
+
   const { id } = await params
   const body = await request.json().catch(() => null)
   const parsed = shiftUpdateSchema.safeParse(body)
@@ -53,8 +56,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json(shift)
 }
 
-// Удалить смену
+// Удалить смену (требуется вход по коду)
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await hasEditAccess())) return unauthorized()
+
   const { id } = await params
   const existing = await db.shift.findUnique({ where: { id } })
   if (!existing) {

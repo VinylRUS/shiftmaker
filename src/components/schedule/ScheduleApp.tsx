@@ -11,10 +11,10 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { useTheme } from 'next-themes'
-import { CalendarCog, Loader2, Moon, Sun, Users } from 'lucide-react'
+import { CalendarCog, Eye, KeyRound, Loader2, LogOut, Moon, Sun, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +33,11 @@ import { WeekTable } from './WeekTable'
 import { ShiftDialog, type ShiftDialogState } from './ShiftDialog'
 import { EmployeeManager } from './EmployeeManager'
 import { ShiftChipContent } from './ShiftChip'
+import { AccessDialog } from './AccessDialog'
+
+// Обработчик «истёк доступ к редактированию»: назначается компонентом.
+// Срабатывает, когда API отвечает 401 (например, cookie устарела).
+let onUnauthorized: (() => void) | null = null
 
 async function api<T>(url: string, init?: RequestInit): Promise<{ ok: boolean; data?: T; error?: string }> {
   try {
@@ -40,7 +45,10 @@ async function api<T>(url: string, init?: RequestInit): Promise<{ ok: boolean; d
       ...init,
       headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     })
-    const body = res.ok ? ((await res.json()) as T) : undefined
+    if (res.status === 401 && !url.startsWith('/api/access')) onUnauthorized?.()
+    // Тело читаем и при ошибке: сервер присылает понятный текст (например,
+    // «Неверный код», «Смена не найдена»)
+    const body = (await res.json().catch(() => undefined)) as T | undefined
     if (!res.ok) {
       const err = body as unknown as { error?: string } | undefined
       return { ok: false, error: err?.error ?? `Ошибка запроса (${res.status})` }
@@ -81,7 +89,9 @@ function ThemeToggle() {
 export function ScheduleApp() {
   const { toast } = useToast()
 
-  const [mode, setMode] = useState<AppMode>('admin')
+  // По умолчанию — режим просмотра: расписание видит каждый, у кого есть ссылка.
+  // Право на редактирование приходит с сервера (cookie после ввода кода).
+  const [mode, setMode] = useState<AppMode>('view')
   const [weekStart, setWeekStart] = useState(() => toISODate(weekStartOf(new Date())))
   const [employees, setEmployees] = useState<EmployeeDTO[]>([])
   const [shifts, setShifts] = useState<ShiftDTO[]>([])
@@ -92,6 +102,7 @@ export function ScheduleApp() {
   const [employeesOpen, setEmployeesOpen] = useState(false)
   const [confirmCopy, setConfirmCopy] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [accessOpen, setAccessOpen] = useState(false)
 
   const [activeShift, setActiveShift] = useState<ShiftDTO | null>(null)
   const justDraggedRef = useRef(false)
@@ -106,20 +117,50 @@ export function ScheduleApp() {
     [mode, employeeFilter, employees]
   )
 
-  // Режим просмотра читаем из ?mode=view (ссылка для сотрудников).
-  // Синхронизация с внешней системой (URL) после гидратации — намеренно.
+  // Стартовая синхронизация доступа: спрашиваем сервер, есть ли право на
+  // редактирование (cookie живёт 30 дней). ?mode=edit сразу открывает окно входа.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (params.get('mode') === 'view') setMode('view')
+    if (params.get('mode') === 'edit') setAccessOpen(true)
+
+    let cancelled = false
+    void (async () => {
+      const res = await fetch('/api/access')
+      if (!res.ok || cancelled) return
+      const data = (await res.json()) as { edit: boolean }
+      if (data.edit) setMode('admin')
+    })()
+
+    onUnauthorized = () => {
+      setMode('view')
+      setAccessOpen(true)
+    }
+    return () => {
+      cancelled = true
+      onUnauthorized = null
+    }
   }, [])
 
-  const switchMode = (next: AppMode) => {
-    setMode(next)
-    const url = new URL(window.location.href)
-    if (next === 'view') url.searchParams.set('mode', 'view')
-    else url.searchParams.delete('mode')
-    window.history.replaceState(null, '', url.toString())
+  // Вход в режим редактирования по коду (проверяется на сервере)
+  const submitAccessCode = async (code: string): Promise<string | null> => {
+    const { ok, error } = await api('/api/access', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    })
+    if (ok) {
+      setMode('admin')
+      setAccessOpen(false)
+      toast({ title: 'Режим редактирования включён', description: 'Теперь можно составлять расписание.' })
+      return null
+    }
+    return error ?? 'Неверный код'
+  }
+
+  const logout = async () => {
+    await api('/api/access', { method: 'DELETE' })
+    setMode('view')
+    toast({ title: 'Вы вышли из режима редактирования', description: 'Расписание снова только для чтения.' })
   }
 
   // Первичная загрузка сотрудников
@@ -353,19 +394,44 @@ export function ScheduleApp() {
               <CalendarCog className="h-5 w-5" aria-hidden />
             </div>
             <div>
-              <h1 className="text-lg font-semibold leading-tight">График смен</h1>
+              <h1 className="text-lg font-semibold leading-tight">ShiftMaker</h1>
               <p className="hidden text-xs text-muted-foreground sm:block">
-                Планировщик расписания сотрудников
+                График смен · планировщик расписания
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Tabs value={mode} onValueChange={(v) => switchMode(v as AppMode)}>
-              <TabsList aria-label="Режим работы">
-                <TabsTrigger value="admin">Редактор</TabsTrigger>
-                <TabsTrigger value="view">Просмотр</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            {admin ? (
+              <>
+                <Badge variant="secondary" className="hidden gap-1 sm:inline-flex">
+                  <Eye className="h-3 w-3" aria-hidden />
+                  Редактирование
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void logout()}
+                  className="gap-1.5"
+                  title="Вернуться в режим просмотра"
+                >
+                  <LogOut className="h-4 w-4" aria-hidden />
+                  <span className="hidden sm:inline">Выйти</span>
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setAccessOpen(true)}
+                className="gap-1.5"
+                title="Войти в режим редактирования по коду"
+              >
+                <KeyRound className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Войти по коду</span>
+                <span className="sm:hidden">Код</span>
+              </Button>
+            )}
             <ThemeToggle />
           </div>
         </div>
@@ -444,7 +510,7 @@ export function ScheduleApp() {
         <div className="mx-auto w-full max-w-7xl px-4 py-3 text-xs text-muted-foreground">
           {admin
             ? 'Перетаскивайте смены мышью или пальцем, чтобы переносить их между днями и сотрудниками. Клик по пустой ячейке — новая смена, клик по плашке — редактирование.'
-            : 'Режим просмотра · расписание только для чтения.'}
+            : 'Режим просмотра · расписание только для чтения. Для редактирования нажмите «Войти по коду».'}
         </div>
       </footer>
 
@@ -458,6 +524,11 @@ export function ScheduleApp() {
           onSave={saveShift}
           onDelete={deleteShift}
         />
+      )}
+
+      {/* Окно входа по коду: монтируется только при открытии — форма сбрасывается */}
+      {accessOpen && (
+        <AccessDialog open onClose={() => setAccessOpen(false)} onSubmit={submitAccessCode} />
       )}
 
       {/* key обеспечивает сброс формы менеджера при каждом открытии */}

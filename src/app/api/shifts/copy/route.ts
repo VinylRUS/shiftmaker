@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { format } from 'date-fns'
 import { db } from '@/lib/db'
+import { hasEditAccess, unauthorized } from '@/lib/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,8 @@ function addDaysISO(iso: string, days: number): string {
 }
 
 export async function POST(request: Request) {
+  if (!(await hasEditAccess())) return unauthorized()
+
   const body = await request.json().catch(() => null)
   const parsed = copySchema.safeParse(body)
   if (!parsed.success) {
