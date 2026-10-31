@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
-import type { AppMode, EmployeeDTO, ShiftDTO } from '@/lib/types'
+import type { AppMode, EmployeeDTO, ShiftDTO, ShiftTemplateDTO } from '@/lib/types'
 import { weekDays, shiftWeek, toISODate, weekStart as weekStartOf } from '@/lib/date'
 import { Toolbar } from './Toolbar'
 import { WeekTable } from './WeekTable'
@@ -103,6 +103,7 @@ export function ScheduleApp() {
   const [confirmCopy, setConfirmCopy] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [accessOpen, setAccessOpen] = useState(false)
+  const [templates, setTemplates] = useState<ShiftTemplateDTO[]>([])
 
   const [activeShift, setActiveShift] = useState<ShiftDTO | null>(null)
   const justDraggedRef = useRef(false)
@@ -162,6 +163,19 @@ export function ScheduleApp() {
     setMode('view')
     toast({ title: 'Вы вышли из режима редактирования', description: 'Расписание снова только для чтения.' })
   }
+
+  // Пресеты смен: загружаем при входе в режим редактирования
+  useEffect(() => {
+    if (mode !== 'admin') return
+    let cancelled = false
+    void (async () => {
+      const { ok, data } = await api<ShiftTemplateDTO[]>('/api/templates')
+      if (!cancelled && ok && data) setTemplates(data)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
 
   // Первичная загрузка сотрудников
   useEffect(() => {
@@ -310,6 +324,35 @@ export function ScheduleApp() {
     }
     toast({ title: 'Не удалось удалить сотрудника', description: error, variant: 'destructive' })
     return false
+  }
+
+  // ---------- Пресеты смен ----------
+
+  // Сохранить промежуток как пресет; дубликаты не создаются (проверка на сервере)
+  const createTemplate = async (data: { startTime: string; endTime: string }) => {
+    const { ok, data: created, error } = await api<ShiftTemplateDTO & { created?: boolean }>('/api/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    if (ok && created) {
+      setTemplates((prev) => {
+        if (prev.some((t) => t.id === created.id)) return prev
+        return [...prev, created].sort(
+          (a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime)
+        )
+      })
+    } else {
+      toast({ title: 'Не удалось сохранить пресет', description: error, variant: 'destructive' })
+    }
+  }
+
+  const deleteTemplate = async (id: string) => {
+    const { ok, error } = await api(`/api/templates/${id}`, { method: 'DELETE' })
+    if (ok) {
+      setTemplates((prev) => prev.filter((t) => t.id !== id))
+    } else {
+      toast({ title: 'Не удалось удалить пресет', description: error, variant: 'destructive' })
+    }
   }
 
   // ---------- Массовые операции ----------
@@ -520,6 +563,9 @@ export function ScheduleApp() {
           open
           state={shiftDialog}
           employees={employees}
+          templates={templates}
+          onCreateTemplate={createTemplate}
+          onDeleteTemplate={deleteTemplate}
           onClose={() => setShiftDialog(null)}
           onSave={saveShift}
           onDelete={deleteShift}

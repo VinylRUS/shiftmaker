@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -29,8 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Trash2, Moon, CalendarOff } from 'lucide-react'
-import type { EmployeeDTO, ShiftDTO } from '@/lib/types'
+import { Loader2, Trash2, Moon, CalendarOff, X } from 'lucide-react'
+import type { EmployeeDTO, ShiftDTO, ShiftTemplateDTO } from '@/lib/types'
 import { isOvernight, shiftMinutes } from '@/lib/date'
 
 export interface ShiftDialogState {
@@ -53,15 +54,30 @@ interface ShiftDialogProps {
     note: string | null
   }) => Promise<boolean> // true — успех, диалог можно закрыть
   onDelete?: (shift: ShiftDTO) => Promise<boolean>
+  // Пресеты смен (предлагаются только при создании новой смены)
+  templates?: ShiftTemplateDTO[]
+  onCreateTemplate?: (data: { startTime: string; endTime: string }) => void
+  onDeleteTemplate?: (id: string) => void
 }
 
-export function ShiftDialog({ open, state, employees, onClose, onSave, onDelete }: ShiftDialogProps) {
+export function ShiftDialog({
+  open,
+  state,
+  employees,
+  onClose,
+  onSave,
+  onDelete,
+  templates,
+  onCreateTemplate,
+  onDeleteTemplate,
+}: ShiftDialogProps) {
   // Диалог монтируется только при открытии, поэтому форму инициализируем лениво
   const [employeeId, setEmployeeId] = useState(() => state.shift?.employeeId ?? state.employeeId)
   const [date, setDate] = useState(() => state.shift?.date ?? state.date)
   const [startTime, setStartTime] = useState(() => state.shift?.startTime ?? '')
   const [endTime, setEndTime] = useState(() => state.shift?.endTime ?? '')
   const [note, setNote] = useState(() => state.shift?.note ?? '')
+  const [saveAsPreset, setSaveAsPreset] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -83,7 +99,20 @@ export function ShiftDialog({ open, state, employees, onClose, onSave, onDelete 
       note: note.trim() || null,
     })
     setSaving(false)
-    if (ok) onClose()
+    if (ok) {
+      // Галочка «Сохранить как пресет»: сохраняем промежуток, но не дублируем
+      // уже существующий пресет (дубль отсекается и на сервере)
+      if (
+        !editing &&
+        saveAsPreset &&
+        startTime &&
+        endTime &&
+        !templates?.some((t) => t.startTime === startTime && t.endTime === endTime)
+      ) {
+        onCreateTemplate?.({ startTime, endTime })
+      }
+      onClose()
+    }
   }
 
   const handleDelete = async () => {
@@ -169,6 +198,68 @@ export function ShiftDialog({ open, state, employees, onClose, onSave, onDelete 
               <CalendarOff className="h-3.5 w-3.5" aria-hidden />
               Длительность · {Math.floor(minutes / 60)} ч {minutes % 60} мин
             </p>
+          )}
+
+          {/* Пресеты — только при создании новой смены */}
+          {!editing && templates && templates.length > 0 && (
+            <div className="grid gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Пресеты смен</span>
+              <div className="flex flex-wrap gap-1.5">
+                {templates.map((t) => (
+                  <div key={t.id} className="inline-flex overflow-hidden rounded-md border">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartTime(t.startTime)
+                        setEndTime(t.endTime)
+                      }}
+                      title={`Подставить время ${t.startTime}–${t.endTime}`}
+                      className="flex items-center gap-1 bg-muted/40 px-2 py-1 text-xs font-medium tabular-nums transition-colors hover:bg-accent"
+                    >
+                      {t.startTime}–{t.endTime}
+                      {isOvernight(t.startTime, t.endTime) && (
+                        <Moon
+                          className="h-3 w-3 opacity-70"
+                          aria-label="Смена переходит на следующий день"
+                        />
+                      )}
+                    </button>
+                    {onDeleteTemplate && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteTemplate(t.id)}
+                        aria-label={`Удалить пресет ${t.startTime}–${t.endTime}`}
+                        title="Удалить пресет"
+                        className="flex w-6 items-center justify-center border-l bg-muted/40 text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Нажмите на пресет, чтобы подставить время.
+              </p>
+            </div>
+          )}
+
+          {/* Сохранение промежутка как пресета — только для новой смены */}
+          {!editing && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="save-preset"
+                checked={saveAsPreset}
+                disabled={!startTime || !endTime}
+                onCheckedChange={(v) => setSaveAsPreset(v === true)}
+              />
+              <Label
+                htmlFor="save-preset"
+                className="cursor-pointer text-xs font-normal text-muted-foreground"
+              >
+                Сохранить промежуток как пресет
+              </Label>
+            </div>
           )}
 
           <div className="grid gap-2">

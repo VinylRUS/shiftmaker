@@ -19,6 +19,17 @@ model Employee {
   shifts    Shift[]
 }
 
+// Пресет смены — сохранённый промежуток времени для быстрого добавления смен.
+// Создаётся галочкой «Сохранить как пресет» в диалоге смены.
+model ShiftTemplate {
+  id        String   @id @default(cuid())
+  startTime String // HH:mm
+  endTime   String // HH:mm (<= startTime — смена через полночь)
+  createdAt DateTime @default(now())
+
+  @@unique([startTime, endTime])
+}
+
 // Смена — ячейка таблицы (дата + сотрудник)
 // startTime/endTime необязательны: без времени = дежурство в течение дня
 model Shift {

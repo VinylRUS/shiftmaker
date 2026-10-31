@@ -17,6 +17,13 @@ export interface ShiftDTO {
   note: string | null
 }
 
+// Пресет смены: сохранённый промежуток времени (для быстрого добавления смен)
+export interface ShiftTemplateDTO {
+  id: string
+  startTime: string // HH:mm
+  endTime: string // HH:mm
+}
+
 // Данные формы создания/редактирования смены
 export interface ShiftInput {
   employeeId: string
