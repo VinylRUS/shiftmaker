@@ -1,7 +1,9 @@
-# Деплой «Графика смен» на bothost.ru (тариф Pro)
+# Деплой ShiftMaker на bothost.ru (тариф Pro)
 
 Пошаговая инструкция. Всё, что нужно для деплоя, уже лежит в репозитории:
 `Dockerfile`, `.dockerignore`, `scripts/init-db.mjs`, эндпоинт `/health`.
+
+Репозиторий: **https://github.com/VinylRUS/shiftmaker**
 
 ---
 
@@ -24,12 +26,14 @@
 
 ## Шаг 1. Залейте код на GitHub
 
-Создайте репозиторий (можно приватный) и запушьте проект:
+Репозиторий уже создан: **https://github.com/VinylRUS/shiftmaker** — код в нём
+(ветка `main`). Если вы клонировали его заново, обновления отправляются так:
 
 ```bash
-cd папка-проекта
-git remote add origin https://github.com/ВАШ_ЛОГИН/grafik-smen.git
-git push -u origin main
+cd shiftmaker
+git add -A
+git commit -m "описание изменений"
+git push origin main
 ```
 
 Если не хотите возиться с Git — есть вариант «из архива» (Приложение Б в конце),
@@ -165,7 +169,7 @@ CMD ["sh", "-c", "node scripts/init-db.mjs && npm start"]
 
 ## Приложение Б. Деплой из архива (без Git)
 
-1. Возьмите файл `график-смен-bothost.zip` (без `node_modules`, ~1 МБ).
+1. Возьмите файл `shiftmaker-bothost.zip` (без `node_modules`, ~1 МБ).
 2. В [профиле](https://bothost.ru/profile.php) включите «Загрузка бота из архива».
 3. На дашборде появится кнопка **«Загрузить из архива»** → мастер из 3 шагов:
    архив → настройки (язык Node.js, главный файл `scripts/init-db.mjs`) → деплой.
