@@ -16,8 +16,9 @@
 
 ```bash
 npm install          # зависимости
+cp .env.example .env # путь к базе (опционально, есть умолчание db/custom.db)
 npm run db:generate  # Prisma-клиент
-npm run db:init      # создать БД (db/custom.db) + демо-данные
+npm run db:init      # создать БД + демо-данные при первом запуске
 npm run dev          # http://localhost:3000
 ```
 

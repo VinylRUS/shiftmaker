@@ -8,7 +8,7 @@
 // Вызывается из Dockerfile перед запуском сервера:
 //   CMD ["sh", "-c", "node scripts/init-db.mjs && npm start"]
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PrismaClient } from '@prisma/client'
@@ -16,10 +16,24 @@ import { seedDemoData } from '../prisma/seed.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-// Куда Prisma реально положит файл базы.
+// Node не подхватывает .env автоматически (это делает только Next/Prisma CLI),
+// поэтому для единообразия читаем DATABASE_URL из .env руками.
+// Если и её нет — путь по умолчанию: db/custom.db в корне проекта.
 // Относительные пути Prisma отсчитывает от папки prisma/schema.prisma.
+if (!process.env.DATABASE_URL) {
+  try {
+    const envText = readFileSync(resolve(root, '.env'), 'utf8')
+    const match = envText.match(/^DATABASE_URL\s*=\s*(.+)$/m)
+    if (match) process.env.DATABASE_URL = match[1].trim()
+  } catch {
+    /* .env отсутствует — не страшно */
+  }
+  process.env.DATABASE_URL ||= 'file:../db/custom.db'
+}
+
+// Куда Prisma реально положит файл базы.
 function dbFilePath() {
-  const url = process.env.DATABASE_URL || 'file:./db/custom.db'
+  const url = process.env.DATABASE_URL
   const p = url.startsWith('file:') ? url.slice(5) : url
   return isAbsolute(p) ? p : resolve(root, 'prisma', p)
 }
